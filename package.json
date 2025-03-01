@@ -27,5 +27,9 @@
     "Capacitor"
   ],
   "author": "momo-AUX1",
+  "repository": {
+  "type": "git",
+  "url": "https://github.com/momo-AUX1/capacitor-xbox"
+},
   "license": "MIT"
 }
