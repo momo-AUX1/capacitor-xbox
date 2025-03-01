@@ -1,0 +1,31 @@
+{
+  "name": "capacitor-xbox",
+  "version": "1.1.0",
+  "description": "Capacitor for xbox and UWP, powered by UWPjs.",
+  "type": "module",
+  "main": "./index.js",
+  "bin": {
+    "capacitor-xbox": "./cli.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./uwp": "./uwp.js",
+    "./capacitorUWP": "./capacitorUWP.js"
+  },
+  "keywords": [
+    "XBOX",
+    "Windows",
+    "PC",
+    "Console",
+    "Capacitorjs",
+    "React",
+    "Vue",
+    "Svelte",
+    "Angular",
+    "Windows Phone",
+    "Console",
+    "Capacitor"
+  ],
+  "author": "momo-AUX1",
+  "license": "MIT"
+}
