@@ -15,6 +15,11 @@ A [Capacitor](https://capacitorjs.com/) implementation powered by [UWP.js](https
 
 ---
 
+### Disclaimer
+Capacitor Xbox and UWP.js are in no way affiliated with Capacitor, Ionic, or Microsoft. This is a personal project intended solely to assist developers in the creation and porting of web applications and games to Xbox/Windows platforms.
+
+---
+
 ## Features
 - **Seamlessly mirrors Capacitor**: Drop-in usage if you’re already using Capacitor on other platforms.
 - **UWP.js Under the Hood**: Extends [UWP.js](https://github.com/momo-AUX1/UWP.js) to talk to native Windows/Xbox APIs, file system, and more.
