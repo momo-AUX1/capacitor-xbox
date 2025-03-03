@@ -33,6 +33,12 @@ Capacitor Xbox and UWP.js are in no way affiliated with Capacitor, Ionic, or Mic
 ```bash
 npm install capacitor-xbox
 ```
+
+Then use the help function to quickly see what you can do
+```bash
+npx capacitor-xbox help
+```
+
 Here’s an example file structure showing where each piece typically goes:
 ```
 my-capacitor-xbox-project/
