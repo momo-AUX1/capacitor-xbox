@@ -1,7 +1,7 @@
 # Capacitor Xbox
 
 <p align="center">
-  <img src="https://git.nanodata.cloud/moonpower/uwpjs/raw/branch/main/logo.png" alt="Capacitor Xbox Logo" width="200" />
+  <img src="githubimg/logo.png" alt="Capacitor Xbox Logo" width="200" />
 </p>
 
 A [Capacitor](https://capacitorjs.com/) implementation powered by [UWP.js](https://github.com/momo-AUX1/UWP.js) for Xbox and Windows. This project aims to mirror Capacitor’s APIs and integrate them with native UWP features, providing a bridge to run web content on Microsoft platforms with minimal changes.
@@ -37,6 +37,16 @@ npm install capacitor-xbox
 Then use the help function to quickly see what you can do
 ```bash
 npx capacitor-xbox help
+```
+
+Common sync options:
+
+```bash
+# Rename .wasm files to .txt and update references
+npx capacitor-xbox sync --patch-wasm
+
+# Make the first <canvas> fill the screen via inline CSS
+npx capacitor-xbox sync --patch-css
 ```
 
 Here’s an example file structure showing where each piece typically goes:
