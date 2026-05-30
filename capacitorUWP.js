@@ -229,6 +229,8 @@ const PLUGIN_METHODS = {
     "removeAllListeners",
   ],
   CapacitorBarcodeScanner: ["scanBarcode"],
+  SecureStorage: ["set", "get", "remove", "clear", "keys"],
+  UserVerification: ["isAvailable", "verify"],
   CapacitorBackgroundRunner: [
     "checkPermissions",
     "requestPermissions",
@@ -287,6 +289,46 @@ function getWindow() {
 
 function isUwpWebViewHost(win = getWindow()) {
   return !!(win && win.chrome && win.chrome.webview && typeof win.chrome.webview.postMessage === "function");
+}
+
+function ensureCapacitorCustomPlatform(platform = "windows", plugins = {}) {
+  const win = getWindow();
+  const customPlatform = win.CapacitorCustomPlatform || {};
+  customPlatform.name = platform || customPlatform.name || "windows";
+  customPlatform.plugins = customPlatform.plugins || {};
+  Object.assign(customPlatform.plugins, plugins);
+  win.CapacitorCustomPlatform = customPlatform;
+  return customPlatform;
+}
+
+function createLazyCustomPlatformPlugin(pluginName, methods = []) {
+  const lazyPlugin = {};
+  for (const methodName of methods) {
+    lazyPlugin[methodName] = async (...args) => {
+      const win = getWindow();
+      const ready = win.CapacitorUWP && win.CapacitorUWP.ready;
+      if (ready) {
+        await ready;
+      }
+      const plugin = win.Capacitor
+        && win.Capacitor._uwpPluginImplementations
+        && win.Capacitor._uwpPluginImplementations[pluginName];
+      if (!plugin || typeof plugin[methodName] !== "function") {
+        unavailable(pluginName, methodName, "plugin method is not registered");
+      }
+      return plugin[methodName](...args);
+    };
+  }
+  return lazyPlugin;
+}
+
+function createLazyCustomPlatformPlugins() {
+  return Object.fromEntries(
+    Object.entries(PLUGIN_METHODS).map(([pluginName, methods]) => [
+      pluginName,
+      createLazyCustomPlatformPlugin(pluginName, methods),
+    ]),
+  );
 }
 
 function createCapacitorError(message, code = CAP_ERROR.Unavailable) {
@@ -459,9 +501,7 @@ function createPluginHeaders() {
 
 function installCapacitorRuntime(bridge, platform) {
   const win = getWindow();
-  win.CapacitorCustomPlatform = {
-    name: platform,
-  };
+  ensureCapacitorCustomPlatform(platform);
 
   const cap = win.Capacitor || {};
   cap.Plugins = cap.Plugins || {};
@@ -489,7 +529,10 @@ function installCapacitorRuntime(bridge, platform) {
   };
 
   cap.nativePromise = async (pluginName, methodName, options) => {
-    const plugin = cap._uwpPluginImplementations[pluginName] || cap.Plugins[pluginName];
+    const plugin = cap._uwpPluginImplementations[pluginName]
+      || (win.CapacitorCustomPlatform
+        && win.CapacitorCustomPlatform.plugins
+        && win.CapacitorCustomPlatform.plugins[pluginName]);
     if (!plugin || typeof plugin[methodName] !== "function") {
       unavailable(pluginName, methodName, "plugin method is not registered");
     }
@@ -497,7 +540,10 @@ function installCapacitorRuntime(bridge, platform) {
   };
 
   cap.nativeCallback = async (pluginName, methodName, options, callback) => {
-    const plugin = cap._uwpPluginImplementations[pluginName] || cap.Plugins[pluginName];
+    const plugin = cap._uwpPluginImplementations[pluginName]
+      || (win.CapacitorCustomPlatform
+        && win.CapacitorCustomPlatform.plugins
+        && win.CapacitorCustomPlatform.plugins[pluginName]);
     if (!plugin || typeof plugin[methodName] !== "function") {
       unavailable(pluginName, methodName, "plugin callback is not registered");
     }
@@ -552,24 +598,44 @@ function bootstrapCapacitorHeaders() {
   const win = getWindow();
   const cap = win.Capacitor || {};
 
-  win.CapacitorCustomPlatform = win.CapacitorCustomPlatform || {
-    name: "windows",
-  };
+  ensureCapacitorCustomPlatform("windows", createLazyCustomPlatformPlugins());
 
   cap.Plugins = cap.Plugins || {};
   cap.PluginHeaders = mergePluginHeaders(cap.PluginHeaders || [], createPluginHeaders());
-  cap.nativePromise = cap.nativePromise || ((pluginName, methodName) => Promise.reject(
-    createCapacitorError(
-      `${pluginName}.${methodName}() is not ready. Initialize CapacitorUWP before calling native plugins.`,
-      CAP_ERROR.Unavailable,
-    ),
-  ));
-  cap.nativeCallback = cap.nativeCallback || ((pluginName, methodName) => Promise.reject(
-    createCapacitorError(
-      `${pluginName}.${methodName}() is not ready. Initialize CapacitorUWP before adding listeners.`,
-      CAP_ERROR.Unavailable,
-    ),
-  ));
+  const pendingNativePromise = (pluginName, methodName, options) => {
+    const ready = win.CapacitorUWP && win.CapacitorUWP.ready;
+    if (!ready) {
+      return Promise.reject(createCapacitorError(
+        `${pluginName}.${methodName}() is not ready. Initialize CapacitorUWP before calling native plugins.`,
+        CAP_ERROR.Unavailable,
+      ));
+    }
+    return Promise.resolve(ready).then(() => {
+      const nativePromise = win.Capacitor && win.Capacitor.nativePromise;
+      if (!nativePromise || nativePromise === pendingNativePromise) {
+        unavailable(pluginName, methodName, "native promise bridge is not registered");
+      }
+      return nativePromise(pluginName, methodName, options);
+    });
+  };
+  const pendingNativeCallback = (pluginName, methodName, options, callback) => {
+    const ready = win.CapacitorUWP && win.CapacitorUWP.ready;
+    if (!ready) {
+      return Promise.reject(createCapacitorError(
+        `${pluginName}.${methodName}() is not ready. Initialize CapacitorUWP before adding listeners.`,
+        CAP_ERROR.Unavailable,
+      ));
+    }
+    return Promise.resolve(ready).then(() => {
+      const nativeCallback = win.Capacitor && win.Capacitor.nativeCallback;
+      if (!nativeCallback || nativeCallback === pendingNativeCallback) {
+        unavailable(pluginName, methodName, "native callback bridge is not registered");
+      }
+      return nativeCallback(pluginName, methodName, options, callback);
+    });
+  };
+  cap.nativePromise = cap.nativePromise || pendingNativePromise;
+  cap.nativeCallback = cap.nativeCallback || pendingNativeCallback;
   win.Capacitor = cap;
   win.capacitor = cap;
 }
@@ -2279,7 +2345,16 @@ const CapacitorUWP = {
     const cap = installCapacitorRuntime(bridge, platform);
     await hydrateCapacitorConfig(cap);
     const plugins = buildPlugins(bridge, platform);
-    for (const [name, plugin] of Object.entries(plugins)) {
+    const secureStorage = createSecureStoragePlugin(bridge);
+    const userVerification = createUserVerificationPlugin(bridge);
+    const runtimePlugins = {
+      ...plugins,
+      SecureStorage: secureStorage,
+      UserVerification: userVerification,
+    };
+
+    ensureCapacitorCustomPlatform(platform, runtimePlugins);
+    for (const [name, plugin] of Object.entries(runtimePlugins)) {
       registerPluginObject(cap, name, plugin);
     }
 
@@ -2295,16 +2370,9 @@ const CapacitorUWP = {
       bridge,
       initialized: true,
       ready: Promise.resolve(cap),
-      SecureStorage: createSecureStoragePlugin(bridge),
-      UserVerification: createUserVerificationPlugin(bridge),
+      SecureStorage: secureStorage,
+      UserVerification: userVerification,
     };
-
-    cap.SecureStorage = win.CapacitorUWP.SecureStorage;
-    cap.UserVerification = win.CapacitorUWP.UserVerification;
-    cap.Plugins.SecureStorage = win.CapacitorUWP.SecureStorage;
-    cap.Plugins.UserVerification = win.CapacitorUWP.UserVerification;
-    cap._uwpPluginImplementations.SecureStorage = win.CapacitorUWP.SecureStorage;
-    cap._uwpPluginImplementations.UserVerification = win.CapacitorUWP.UserVerification;
 
     return cap;
   },
