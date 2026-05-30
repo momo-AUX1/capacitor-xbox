@@ -285,6 +285,10 @@ function getWindow() {
   return typeof window !== "undefined" ? window : globalThis;
 }
 
+function isUwpWebViewHost(win = getWindow()) {
+  return !!(win && win.chrome && win.chrome.webview && typeof win.chrome.webview.postMessage === "function");
+}
+
 function createCapacitorError(message, code = CAP_ERROR.Unavailable) {
   const win = getWindow();
   const CapException = win.Capacitor && win.Capacitor.Exception;
@@ -2258,7 +2262,7 @@ const CapacitorUWP = {
     let platform = "windows";
 
     if (!bridge) {
-      bridge = win.__uwpBridge || (win.chrome && win.chrome.webview ? new UwpBridge() : null);
+      bridge = win.__uwpBridge || (isUwpWebViewHost(win) ? new UwpBridge() : null);
     }
     if (!bridge) {
       unavailable("CapacitorUWP", "init", "UwpBridge is required outside the UWP WebView host");
@@ -2312,12 +2316,7 @@ function autoInstallCapacitorRuntime() {
   if (existingApi.ready) {
     return existingApi.ready;
   }
-  if (!win.chrome || !win.chrome.webview) {
-    win.CapacitorUWP = {
-      ...existingApi,
-      init: CapacitorUWP.init.bind(CapacitorUWP),
-      autoInit: autoInstallCapacitorRuntime,
-    };
+  if (!isUwpWebViewHost(win)) {
     return null;
   }
 
@@ -2336,7 +2335,10 @@ function autoInstallCapacitorRuntime() {
 
 CapacitorUWP.autoInit = autoInstallCapacitorRuntime;
 
-bootstrapCapacitorHeaders();
-autoInstallCapacitorRuntime();
+if (isUwpWebViewHost()) {
+  bootstrapCapacitorHeaders();
+  autoInstallCapacitorRuntime();
+}
 
+export { CapacitorUWP };
 export default CapacitorUWP;

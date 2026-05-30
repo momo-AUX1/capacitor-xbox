@@ -4,13 +4,45 @@
   "description": "Capacitor for xbox and UWP, powered by UWPjs.",
   "type": "module",
   "main": "./index.js",
+  "types": "./index.d.ts",
   "bin": {
     "capacitor-xbox": "cli.js"
   },
   "exports": {
-    ".": "./index.js",
-    "./uwp": "./uwp.js",
-    "./capacitorUWP": "./capacitorUWP.js"
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./uwp": {
+      "types": "./uwp.d.ts",
+      "import": "./uwp.js",
+      "default": "./uwp.js"
+    },
+    "./capacitorUWP": {
+      "types": "./capacitorUWP.d.ts",
+      "import": "./capacitorUWP.js",
+      "default": "./capacitorUWP.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "uwp.js",
+    "uwp.d.ts",
+    "capacitorUWP.js",
+    "capacitorUWP.d.ts",
+    "cli.js",
+    "bin/capacitor-xbox.zip",
+    "githubimg/logo.png",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0 <9.0.0"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": [
     "XBOX",

@@ -21,10 +21,10 @@ Capacitor Xbox and UWP.js are in no way affiliated with Capacitor, Ionic, or Mic
 ---
 
 ## Features
-- **Seamlessly mirrors Capacitor**: Drop-in usage if you’re already using Capacitor on other platforms.
+- **Capacitor-style UWP/Xbox bridge**: Mirrors a broad Capacitor plugin surface where UWP has matching native APIs.
 - **UWP.js Under the Hood**: Extends [UWP.js](https://github.com/momo-AUX1/UWP.js) to talk to native Windows/Xbox APIs, file system, and more.
 - **Multi-platform**: Windows desktop and Xbox.
-- **“Plug and play”**: Just include the script references and call the same Capacitor methods you already use for iOS/Android in your code.
+- **Runtime shim**: When loaded inside the packaged UWP WebView2 host, it installs a Capacitor-compatible runtime shim for supported APIs.
 - **HTML/JS frameworks**: Use your favorite SPA library or plain HTML. The integrated environment can load them straight from the WebView.
 
 ## How To Use
@@ -68,12 +68,11 @@ my-capacitor-xbox-project/
 
 2. **Include the scripts** in your web build:
 ```js
-import { UwpBridge, CapacitorUWP } from "capacitor-xbox";
+import { CapacitorUWP } from "capacitor-xbox";
 
-// Example usage:
-const bridge = new UwpBridge();
-// Register "CapacitorUWP" plugin so it can initialize
-bridge.registerPlugin(CapacitorUWP);
+// Inside the UWP WebView2 host this is auto-run at import time.
+// Calling it explicitly is safe if you need to await native readiness.
+await CapacitorUWP.autoInit();
 
 // Then do typical Capacitor calls:
 window.Capacitor.Preferences.set({ key: 'myKey', value: 'myVal' });
@@ -92,6 +91,8 @@ window.Capacitor.Preferences.set({ key: 'myKey', value: 'myVal' });
 Current Status / Limitations
 
 Experimental: The Capacitor support layer is still highly experimental, so expect bugs or missing plugins. Some rely on standard web APIs as a fallback, while a few are natively implemented (e.g., Preferences). Over time, more core and community plugins will be added or improved.
+
+This package is not yet a first-class `npx cap add` platform package. It ships its own `capacitor-xbox init` and `capacitor-xbox sync` commands, plus a runtime shim that installs only inside the UWP WebView2 host. Importing it in a normal browser build does not mark the app as native or mutate `window.Capacitor`.
 
 Not all file operations are fully supported on Xbox. For instance, file picking is more limited, and .wasm/.zip can fail to load due to a Microsoft Edge bug. Temporarily, rename them or load as base64.
 

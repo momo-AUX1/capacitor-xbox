@@ -1,15 +1,21 @@
+function getUwpWebView() {
+  const root = typeof window !== "undefined" ? window : globalThis;
+  return root && root.chrome && root.chrome.webview ? root.chrome.webview : null;
+}
+
 class UwpBridge {
-  constructor() {
+  constructor(webview = null) {
     this.eventListeners = {};
     this.plugins = [];
     this._pending = new Map();
     this._nextId = 1;
-
-    window.chrome.webview.addEventListener("message", (event) => {
+    this._webview = null;
+    this._messageListenerAttached = false;
+    this._messageListener = (event) => {
       const raw = event.data;
       let payload;
       try {
-        payload = JSON.parse(raw);
+        payload = typeof raw === "string" ? JSON.parse(raw) : raw;
       } catch (e) {
         console.warn("UwpBridge: received non-JSON message", raw);
         return;
@@ -36,10 +42,40 @@ class UwpBridge {
           resolve(payload.result);
         }
       }
-    });
+    };
+
+    this._attachWebView(webview || getUwpWebView());
+  }
+
+  static isAvailable() {
+    const webview = getUwpWebView();
+    return !!(webview && typeof webview.postMessage === "function");
+  }
+
+  _attachWebView(webview) {
+    if (!webview) {
+      return false;
+    }
+    this._webview = webview;
+    if (!this._messageListenerAttached && typeof webview.addEventListener === "function") {
+      webview.addEventListener("message", this._messageListener);
+      this._messageListenerAttached = true;
+    }
+    return true;
+  }
+
+  _ensureWebView() {
+    if (this._webview && typeof this._webview.postMessage === "function") {
+      return this._webview;
+    }
+    if (this._attachWebView(getUwpWebView()) && this._webview && typeof this._webview.postMessage === "function") {
+      return this._webview;
+    }
+    throw new Error("UwpBridge is only available inside the UWP WebView host.");
   }
 
   async callNative(methodName, ...args) {
+    const webview = this._ensureWebView();
     const id = String(this._nextId++);
     const message = { id, method: methodName, args };
 
@@ -52,7 +88,7 @@ class UwpBridge {
       this._pending.set(id, { resolve, reject, timeout });
     });
 
-    window.chrome.webview.postMessage(JSON.stringify(message));
+    webview.postMessage(JSON.stringify(message));
     return promise;
   }
 
@@ -715,4 +751,5 @@ class UwpBridge {
    */
 }
 
+export { UwpBridge };
 export default UwpBridge;
