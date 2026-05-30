@@ -691,20 +691,20 @@ class UwpBridge {
     return this._callStructured("requestUserVerification", this._json(options));
   }
 
-  async checkBackgroundRunnerPermissions() {
-    return this._callStructured("checkBackgroundRunnerPermissions");
+  async checkBackgroundScriptPermissions() {
+    return this._callStructured("checkBackgroundScriptPermissions");
   }
 
-  async requestBackgroundRunnerPermissions(options = {}) {
-    return this._callStructured("requestBackgroundRunnerPermissions", this._json(options));
+  async requestBackgroundScriptPermissions(options = {}) {
+    return this._callStructured("requestBackgroundScriptPermissions", this._json(options));
   }
 
-  async configureBackgroundRunner(options = {}) {
-    return this._callStructured("configureBackgroundRunner", this._json(options));
+  async configureBackgroundScriptRunner(options = {}) {
+    return this._callStructured("configureBackgroundScriptRunner", this._json(options));
   }
 
-  async dispatchBackgroundRunnerEvent(options = {}) {
-    return this._callStructured("dispatchBackgroundRunnerEvent", this._json(options));
+  async dispatchBackgroundScriptEvent(options = {}) {
+    return this._callStructured("dispatchBackgroundScriptEvent", this._json(options));
   }
 
   /**

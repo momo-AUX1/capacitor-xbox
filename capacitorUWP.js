@@ -1,3 +1,5 @@
+import UwpBridge from "./uwp.js";
+
 const CAP_ERROR = {
   Unavailable: "UNAVAILABLE",
   Unimplemented: "UNIMPLEMENTED",
@@ -515,6 +517,7 @@ function installCapacitorRuntime(bridge, platform) {
   }
 
   win.Capacitor = cap;
+  win.capacitor = cap;
   return cap;
 }
 
@@ -564,6 +567,7 @@ function bootstrapCapacitorHeaders() {
     ),
   ));
   win.Capacitor = cap;
+  win.capacitor = cap;
 }
 
 function registerPluginObject(cap, name, plugin) {
@@ -1585,14 +1589,42 @@ function createUserVerificationPlugin(bridge) {
   };
 }
 
+function createBackgroundRunnerBridgeScript() {
+  return `
+(() => {
+  const storage = window.UwpScriptStorage || {};
+  const device = window.UwpScriptDevice || {};
+  const notifications = window.UwpScriptNotifications || {};
+  window.CapacitorKV = {
+    set: async (key, value) => storage.set && storage.set(key, value),
+    get: async (key) => storage.get ? storage.get(key) : ({ value: null }),
+    remove: async (key) => storage.remove && storage.remove(key),
+  };
+  window.CapacitorDevice = {
+    getNetworkStatus: async () => device.getNetworkStatus ? device.getNetworkStatus() : ({ connected: navigator.onLine, connectionType: navigator.onLine ? 'unknown' : 'none' }),
+    getBatteryStatus: async () => device.getBatteryStatus ? device.getBatteryStatus() : ({ batteryLevel: null, isCharging: false }),
+  };
+  window.CapacitorNotifications = {
+    schedule: async (options) => notifications.schedule && notifications.schedule(options && options.notifications ? options.notifications : options),
+    setBadge: async (options) => notifications.setBadge && notifications.setBadge(options),
+    clearBadge: async () => notifications.clearBadge && notifications.clearBadge(),
+  };
+})();
+`;
+}
+
 function createBackgroundRunnerPlugin(bridge) {
   const listeners = createListenerManager(bridge, "CapacitorBackgroundRunner", {
     backgroundRunnerNotificationReceived: "backgroundRunnerNotificationReceived",
   });
   const config = getCapacitorPluginConfig("BackgroundRunner");
+  const configureRunner = bridge.configureBackgroundScriptRunner || bridge.configureBackgroundRunner;
+  const checkRunnerPermissions = bridge.checkBackgroundScriptPermissions || bridge.checkBackgroundRunnerPermissions;
+  const requestRunnerPermissions = bridge.requestBackgroundScriptPermissions || bridge.requestBackgroundRunnerPermissions;
+  const dispatchRunnerEvent = bridge.dispatchBackgroundScriptEvent || bridge.dispatchBackgroundRunnerEvent;
 
-  if (config && config.autoStart !== false && (config.label || config.event || config.src) && bridge.configureBackgroundRunner) {
-    Promise.resolve(bridge.configureBackgroundRunner(config)).catch((error) => {
+  if (config && config.autoStart !== false && (config.label || config.event || config.src) && configureRunner) {
+    Promise.resolve(configureRunner.call(bridge, config)).catch((error) => {
       console.warn("CapacitorBackgroundRunner: autoStart registration failed", error);
     });
   }
@@ -1601,17 +1633,21 @@ function createBackgroundRunnerPlugin(bridge) {
     checkPermissions: () => callNative(
       "CapacitorBackgroundRunner",
       "checkPermissions",
-      () => bridge.checkBackgroundRunnerPermissions(),
+      () => checkRunnerPermissions.call(bridge),
     ),
     requestPermissions: (options = {}) => callNative(
       "CapacitorBackgroundRunner",
       "requestPermissions",
-      () => bridge.requestBackgroundRunnerPermissions(options),
+      () => requestRunnerPermissions.call(bridge, options),
     ),
     dispatchEvent: (options = {}) => callNative(
       "CapacitorBackgroundRunner",
       "dispatchEvent",
-      () => bridge.dispatchBackgroundRunnerEvent({ ...config, ...options }),
+      () => dispatchRunnerEvent.call(bridge, {
+        ...config,
+        ...options,
+        bootstrap: createBackgroundRunnerBridgeScript(),
+      }),
     ),
     addListener: listeners.addListener,
     removeListener: listeners.removeListener,
@@ -2206,6 +2242,17 @@ const CapacitorUWP = {
     const win = getWindow();
     let platform = "windows";
 
+    if (!bridge) {
+      bridge = win.__uwpBridge || (win.chrome && win.chrome.webview ? new UwpBridge() : null);
+    }
+    if (!bridge) {
+      unavailable("CapacitorUWP", "init", "UwpBridge is required outside the UWP WebView host");
+    }
+    if (win.CapacitorUWP && win.CapacitorUWP.initialized && win.CapacitorUWP.bridge === bridge) {
+      return win.Capacitor;
+    }
+    win.__uwpBridge = bridge;
+
     try {
       platform = await bridge.getPlatform();
     } catch {}
@@ -2221,8 +2268,14 @@ const CapacitorUWP = {
       bridge.showAlert("Alert", String(message));
     };
 
+    const existingApi = win.CapacitorUWP || {};
     win.CapacitorUWP = {
+      ...existingApi,
+      init: CapacitorUWP.init.bind(CapacitorUWP),
+      autoInit: CapacitorUWP.autoInit,
       bridge,
+      initialized: true,
+      ready: Promise.resolve(cap),
       SecureStorage: createSecureStoragePlugin(bridge),
       UserVerification: createUserVerificationPlugin(bridge),
     };
@@ -2238,6 +2291,37 @@ const CapacitorUWP = {
   },
 };
 
+function autoInstallCapacitorRuntime() {
+  const win = getWindow();
+  const existingApi = win.CapacitorUWP || {};
+  if (existingApi.ready) {
+    return existingApi.ready;
+  }
+  if (!win.chrome || !win.chrome.webview) {
+    win.CapacitorUWP = {
+      ...existingApi,
+      init: CapacitorUWP.init.bind(CapacitorUWP),
+      autoInit: autoInstallCapacitorRuntime,
+    };
+    return null;
+  }
+
+  const ready = CapacitorUWP.init(win.__uwpBridge || new UwpBridge()).catch((error) => {
+    console.error("CapacitorUWP auto-init failed", error);
+    throw error;
+  });
+  win.CapacitorUWP = {
+    ...existingApi,
+    init: CapacitorUWP.init.bind(CapacitorUWP),
+    autoInit: autoInstallCapacitorRuntime,
+    ready,
+  };
+  return ready;
+}
+
+CapacitorUWP.autoInit = autoInstallCapacitorRuntime;
+
 bootstrapCapacitorHeaders();
+autoInstallCapacitorRuntime();
 
 export default CapacitorUWP;
