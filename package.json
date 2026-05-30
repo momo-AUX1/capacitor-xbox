@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./index.js",
   "bin": {
-    "capacitor-xbox": "./cli.js"
+    "capacitor-xbox": "cli.js"
   },
   "exports": {
     ".": "./index.js",
@@ -28,8 +28,8 @@
   ],
   "author": "momo-AUX1",
   "repository": {
-  "type": "git",
-  "url": "https://github.com/momo-AUX1/capacitor-xbox"
-},
+    "type": "git",
+    "url": "git+https://github.com/momo-AUX1/capacitor-xbox.git"
+  },
   "license": "MIT"
 }

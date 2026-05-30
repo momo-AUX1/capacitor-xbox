@@ -1,0 +1,4 @@
+temp/
+*.tgz
+.DS_Store
+env
