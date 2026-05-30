@@ -68,6 +68,23 @@ class UwpBridge {
       this.eventListeners[event] = [];
     }
     this.eventListeners[event].push(callback);
+    return {
+      remove: () => this.off(event, callback),
+    };
+  }
+
+  off(event, callback) {
+    if (!this.eventListeners[event]) {
+      return;
+    }
+
+    this.eventListeners[event] = this.eventListeners[event].filter(
+      (listener) => listener !== callback,
+    );
+
+    if (!this.eventListeners[event].length) {
+      delete this.eventListeners[event];
+    }
   }
 
   emit(event, data) {
@@ -82,6 +99,15 @@ class UwpBridge {
       throw new Error(response.error || 'Operation failed');
     }
     return response.data;
+  }
+
+  async _callStructured(methodName, ...args) {
+    const result = await this.callNative(methodName, ...args);
+    return this._handleStructuredResponse(result);
+  }
+
+  _json(value) {
+    return value == null ? null : JSON.stringify(value);
   }
 
   async readFile(fileName, codec = null) {
@@ -287,6 +313,390 @@ class UwpBridge {
   async openUrl(url) {
     const result = await this.callNative("openUrl", url);
     return this._handleStructuredResponse(result);
+  }
+
+  async showActionSheet(options = {}) {
+    return this._callStructured("showActionSheet", this._json(options));
+  }
+
+  async getAppInfo() {
+    return this._callStructured("getAppInfo");
+  }
+
+  async getAppState() {
+    return this._callStructured("getAppState");
+  }
+
+  async getLaunchUrl() {
+    return this._callStructured("getLaunchUrl");
+  }
+
+  async minimizeApp() {
+    return this._callStructured("minimizeApp");
+  }
+
+  async getAppLanguage() {
+    return this._callStructured("getAppLanguage");
+  }
+
+  async toggleBackButtonHandler(options = {}) {
+    return this._callStructured("toggleBackButtonHandler", this._json(options));
+  }
+
+  async openBrowser(options = {}) {
+    return this._callStructured("openBrowser", this._json(options));
+  }
+
+  async closeBrowser() {
+    return this._callStructured("closeBrowser");
+  }
+
+  async writeClipboard(options = {}) {
+    return this._callStructured("writeClipboard", this._json(options));
+  }
+
+  async readClipboard() {
+    return this._callStructured("readClipboard");
+  }
+
+  async getDeviceId() {
+    return this._callStructured("getDeviceId");
+  }
+
+  async getDeviceInfo() {
+    return this._callStructured("getDeviceInfo");
+  }
+
+  async getBatteryInfo() {
+    return this._callStructured("getBatteryInfo");
+  }
+
+  async getLanguageCode() {
+    return this._callStructured("getLanguageCode");
+  }
+
+  async getLanguageTag() {
+    return this._callStructured("getLanguageTag");
+  }
+
+  async promptDialog(options = {}) {
+    return this._callStructured("promptDialog", this._json(options));
+  }
+
+  async scheduleLocalNotifications(options = {}) {
+    return this._callStructured("scheduleLocalNotifications", this._json(options));
+  }
+
+  async getPendingLocalNotifications() {
+    return this._callStructured("getPendingLocalNotifications");
+  }
+
+  async registerLocalNotificationActionTypes(options = {}) {
+    return this._callStructured("registerLocalNotificationActionTypes", this._json(options));
+  }
+
+  async cancelLocalNotifications(options = {}) {
+    return this._callStructured("cancelLocalNotifications", this._json(options));
+  }
+
+  async areLocalNotificationsEnabled() {
+    return this._callStructured("areLocalNotificationsEnabled");
+  }
+
+  async getDeliveredNotifications() {
+    return this._callStructured("getDeliveredNotifications");
+  }
+
+  async removeDeliveredNotifications(options = {}) {
+    return this._callStructured("removeDeliveredNotifications", this._json(options));
+  }
+
+  async removeAllDeliveredNotifications() {
+    return this._callStructured("removeAllDeliveredNotifications");
+  }
+
+  async createNotificationChannel(channel = {}) {
+    return this._callStructured("createNotificationChannel", this._json(channel));
+  }
+
+  async deleteNotificationChannel(options = {}) {
+    return this._callStructured("deleteNotificationChannel", this._json(options));
+  }
+
+  async listNotificationChannels() {
+    return this._callStructured("listNotificationChannels");
+  }
+
+  async checkNotificationPermissions() {
+    return this._callStructured("checkNotificationPermissions");
+  }
+
+  async requestNotificationPermissions() {
+    return this._callStructured("requestNotificationPermissions");
+  }
+
+  async checkExactNotificationSetting() {
+    return this._callStructured("checkExactNotificationSetting");
+  }
+
+  async changeExactNotificationSetting() {
+    return this._callStructured("changeExactNotificationSetting");
+  }
+
+  async startMotionUpdates(options = {}) {
+    return this._callStructured("startMotionUpdates", this._json(options));
+  }
+
+  async stopMotionUpdates() {
+    return this._callStructured("stopMotionUpdates");
+  }
+
+  async getNetworkStatus() {
+    return this._callStructured("getNetworkStatus");
+  }
+
+  async registerPushNotifications(options = {}) {
+    return this._callStructured("registerPushNotifications", this._json(options));
+  }
+
+  async unregisterPushNotifications() {
+    return this._callStructured("unregisterPushNotifications");
+  }
+
+  async getScreenOrientation() {
+    return this._callStructured("getScreenOrientation");
+  }
+
+  async lockScreenOrientation(options = {}) {
+    return this._callStructured("lockScreenOrientation", this._json(options));
+  }
+
+  async unlockScreenOrientation() {
+    return this._callStructured("unlockScreenOrientation");
+  }
+
+  async isScreenReaderEnabled() {
+    return this._callStructured("isScreenReaderEnabled");
+  }
+
+  async speak(options = {}) {
+    return this._callStructured("speak", this._json(options));
+  }
+
+  async canShare(options = {}) {
+    return this._callStructured("canShare", this._json(options));
+  }
+
+  async share(options = {}) {
+    return this._callStructured("share", this._json(options));
+  }
+
+  async showSplashScreen(options = {}) {
+    return this._callStructured("showSplashScreen", this._json(options));
+  }
+
+  async hideSplashScreen(options = {}) {
+    return this._callStructured("hideSplashScreen", this._json(options));
+  }
+
+  async setStatusBarStyle(options = {}) {
+    return this._callStructured("setStatusBarStyle", this._json(options));
+  }
+
+  async setStatusBarBackgroundColor(options = {}) {
+    return this._callStructured("setStatusBarBackgroundColor", this._json(options));
+  }
+
+  async showStatusBar(options = {}) {
+    return this._callStructured("showStatusBar", this._json(options));
+  }
+
+  async hideStatusBar(options = {}) {
+    return this._callStructured("hideStatusBar", this._json(options));
+  }
+
+  async getStatusBarInfo() {
+    return this._callStructured("getStatusBarInfo");
+  }
+
+  async setStatusBarOverlaysWebView(options = {}) {
+    return this._callStructured("setStatusBarOverlaysWebView", this._json(options));
+  }
+
+  async showToast(options = {}) {
+    return this._callStructured("showToast", this._json(options));
+  }
+
+  async takePhoto(options = {}) {
+    return this._callStructured("takePhoto", this._json(options));
+  }
+
+  async recordVideo(options = {}) {
+    return this._callStructured("recordVideo", this._json(options));
+  }
+
+  async playVideo(options = {}) {
+    return this._callStructured("playVideo", this._json(options));
+  }
+
+  async chooseMediaFromGallery(options = {}) {
+    return this._callStructured("chooseMediaFromGallery", this._json(options));
+  }
+
+  async checkCameraPermissions(options = {}) {
+    return this._callStructured("checkCameraPermissions", this._json(options));
+  }
+
+  async requestCameraPermissions(options = {}) {
+    return this._callStructured("requestCameraPermissions", this._json(options));
+  }
+
+  async filesystemReadFile(options = {}) {
+    return this._callStructured("filesystemReadFile", this._json(options));
+  }
+
+  async filesystemReadFileInChunks(options = {}) {
+    return this._callStructured("filesystemReadFileInChunks", this._json(options));
+  }
+
+  async filesystemWriteFile(options = {}) {
+    return this._callStructured("filesystemWriteFile", this._json(options));
+  }
+
+  async filesystemAppendFile(options = {}) {
+    return this._callStructured("filesystemAppendFile", this._json(options));
+  }
+
+  async filesystemDeleteFile(options = {}) {
+    return this._callStructured("filesystemDeleteFile", this._json(options));
+  }
+
+  async filesystemMkdir(options = {}) {
+    return this._callStructured("filesystemMkdir", this._json(options));
+  }
+
+  async filesystemRmdir(options = {}) {
+    return this._callStructured("filesystemRmdir", this._json(options));
+  }
+
+  async filesystemReaddir(options = {}) {
+    return this._callStructured("filesystemReaddir", this._json(options));
+  }
+
+  async filesystemGetUri(options = {}) {
+    return this._callStructured("filesystemGetUri", this._json(options));
+  }
+
+  async filesystemStat(options = {}) {
+    return this._callStructured("filesystemStat", this._json(options));
+  }
+
+  async filesystemRename(options = {}) {
+    return this._callStructured("filesystemRename", this._json(options));
+  }
+
+  async filesystemCopy(options = {}) {
+    return this._callStructured("filesystemCopy", this._json(options));
+  }
+
+  async fileTransferDownload(options = {}) {
+    return this._callStructured("fileTransferDownload", this._json(options));
+  }
+
+  async fileTransferUpload(options = {}) {
+    return this._callStructured("fileTransferUpload", this._json(options));
+  }
+
+  async openDocumentFromLocalPath(options = {}) {
+    return this._callStructured("openDocumentFromLocalPath", this._json(options));
+  }
+
+  async openDocumentFromResources(options = {}) {
+    return this._callStructured("openDocumentFromResources", this._json(options));
+  }
+
+  async openDocumentFromUrl(options = {}) {
+    return this._callStructured("openDocumentFromUrl", this._json(options));
+  }
+
+  async getCurrentPosition(options = {}) {
+    return this._callStructured("getCurrentPosition", this._json(options));
+  }
+
+  async watchPosition(options = {}) {
+    return this._callStructured("watchPosition", this._json(options));
+  }
+
+  async clearPositionWatch(options = {}) {
+    return this._callStructured("clearPositionWatch", this._json(options));
+  }
+
+  async checkGeolocationPermissions(options = {}) {
+    return this._callStructured("checkGeolocationPermissions", this._json(options));
+  }
+
+  async requestGeolocationPermissions(options = {}) {
+    return this._callStructured("requestGeolocationPermissions", this._json(options));
+  }
+
+  async keyboardShow() {
+    return this._callStructured("keyboardShow");
+  }
+
+  async keyboardHide() {
+    return this._callStructured("keyboardHide");
+  }
+
+  async keyboardSetResizeMode(options = {}) {
+    return this._callStructured("keyboardSetResizeMode", this._json(options));
+  }
+
+  async keyboardGetResizeMode() {
+    return this._callStructured("keyboardGetResizeMode");
+  }
+
+  async keyboardSetStyle(options = {}) {
+    return this._callStructured("keyboardSetStyle", this._json(options));
+  }
+
+  async scanBarcode(options = {}) {
+    return this._callStructured("scanBarcode", this._json(options));
+  }
+
+  async secureSet(options = {}) {
+    return this._callStructured("secureSet", this._json(options));
+  }
+
+  async secureGet(options = {}) {
+    return this._callStructured("secureGet", this._json(options));
+  }
+
+  async secureRemove(options = {}) {
+    return this._callStructured("secureRemove", this._json(options));
+  }
+
+  async secureClear(options = {}) {
+    return this._callStructured("secureClear", this._json(options));
+  }
+
+  async secureKeys(options = {}) {
+    return this._callStructured("secureKeys", this._json(options));
+  }
+
+  async checkUserVerificationAvailability() {
+    return this._callStructured("checkUserVerificationAvailability");
+  }
+
+  async requestUserVerification(options = {}) {
+    return this._callStructured("requestUserVerification", this._json(options));
+  }
+
+  async checkBackgroundRunnerPermissions() {
+    return this._callStructured("checkBackgroundRunnerPermissions");
+  }
+
+  async requestBackgroundRunnerPermissions(options = {}) {
+    return this._callStructured("requestBackgroundRunnerPermissions", this._json(options));
   }
 
   /**
