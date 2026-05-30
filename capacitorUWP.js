@@ -1096,7 +1096,21 @@ function createTextZoomPlugin() {
 
 function createToastPlugin(bridge) {
   return {
-    show: (options = {}) => callNative("Toast", "show", () => bridge.showToast(options)),
+    show: async (options = {}) => {
+      try {
+        await bridge.showToast(options);
+      } catch (error) {
+        if (/not found|MissingMethod|not implemented/i.test(String(error && error.message))) {
+          await bridge.showNotification({
+            Id: `toast-${Date.now()}`,
+            Title: options.title || "",
+            Message: options.text || "",
+          });
+          return;
+        }
+        throw normalizeNativeError(error, "Toast", "show");
+      }
+    },
   };
 }
 
