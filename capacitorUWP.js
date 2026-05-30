@@ -2033,17 +2033,25 @@ function createGoogleMapsPlugin() {
 
     async removeMarker(options = {}) {
       const record = getRecord(options);
-      const id = String(options.id || options.markerId);
-      const marker = record.markers.get(id);
+      const markerId = String(
+        options.markerId
+          || options.markerID
+          || (options.marker && options.marker.id)
+          || (record.markers.has(String(options.id)) ? options.id : ""),
+      );
+      if (!markerId) {
+        return;
+      }
+      const marker = record.markers.get(markerId);
       if (marker) {
         marker.remove();
-        record.markers.delete(id);
+        record.markers.delete(markerId);
       }
     },
 
     async removeMarkers(options = {}) {
-      for (const id of options.ids || options.markerIds || []) {
-        await this.removeMarker({ ...options, id });
+      for (const markerId of options.markerIds || options.ids || []) {
+        await this.removeMarker({ ...options, markerId });
       }
     },
 
@@ -2120,7 +2128,7 @@ function createGoogleMapsPlugin() {
     async addTileOverlay(options = {}) {
       const record = getRecord(options);
       const L = await ensureLeaflet();
-      const id = String(options.id || options.tileOverlayId || `tile-${Date.now()}-${record.tileOverlays.size}`);
+      const id = String(options.tileOverlayId || options.overlayId || `tile-${Date.now()}-${record.tileOverlays.size}`);
       const url = options.url || options.urlTemplate;
       if (!url) {
         unavailable("CapacitorGoogleMaps", "addTileOverlay", "url or urlTemplate is required");
@@ -2132,7 +2140,14 @@ function createGoogleMapsPlugin() {
 
     async removeTileOverlay(options = {}) {
       const record = getRecord(options);
-      const id = String(options.id || options.tileOverlayId);
+      const id = String(
+        options.tileOverlayId
+          || options.overlayId
+          || (record.tileOverlays.has(String(options.id)) ? options.id : ""),
+      );
+      if (!id) {
+        return;
+      }
       const layer = record.tileOverlays.get(id);
       if (layer) {
         layer.remove();
