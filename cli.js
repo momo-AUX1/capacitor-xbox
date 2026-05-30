@@ -402,6 +402,21 @@ async function syncProject(modifiers) {
     }
   }
 
+  let capConfig = null;
+  if (fs.existsSync("capacitor.config.json")) {
+    try {
+      capConfig = await readJson("capacitor.config.json");
+    } catch (e) {
+      logWarn(`Could not parse capacitor.config.json: ${e}`);
+    }
+  } else if (fs.existsSync("capacitor.config.ts")) {
+    capConfig = parseCapacitorTs("capacitor.config.ts");
+  }
+  if (capConfig) {
+    await fsp.writeFile(join(uwpAssetsWP, "capacitor.config.json"), JSON.stringify(capConfig, null, 2));
+    logInfo("Copied Capacitor config to UWP web assets.");
+  }
+
   const images = {
     "LockScreenLogo.scale-200.png": [48, 48],
     "Square44x44Logo.scale-200.png": [88, 88],

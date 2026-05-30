@@ -230,12 +230,54 @@ const PLUGIN_METHODS = {
   CapacitorBackgroundRunner: [
     "checkPermissions",
     "requestPermissions",
+    "dispatchEvent",
     "addListener",
     "removeListener",
     "removeNotificationListeners",
   ],
+  CapacitorGoogleMaps: [
+    "create",
+    "destroy",
+    "enableTouch",
+    "disableTouch",
+    "enableClustering",
+    "disableClustering",
+    "enableCurrentLocation",
+    "enableIndoorMaps",
+    "enableTrafficLayer",
+    "enableAccessibilityElements",
+    "setPadding",
+    "setMapType",
+    "getMapType",
+    "setCamera",
+    "getMapBounds",
+    "fitBounds",
+    "mapBoundsContains",
+    "mapBoundsExtend",
+    "addMarker",
+    "addMarkers",
+    "removeMarker",
+    "removeMarkers",
+    "addPolygons",
+    "removePolygons",
+    "addPolylines",
+    "removePolylines",
+    "addCircles",
+    "removeCircles",
+    "addTileOverlay",
+    "removeTileOverlay",
+    "onResize",
+    "onScroll",
+    "onDisplay",
+    "dispatchMapEvent",
+    "addListener",
+    "removeListener",
+    "removeAllListeners",
+  ],
   Watch: ["addListener", "removeListener", "removeAllListeners", "updateWatchUI", "updateWatchData"],
 };
+PLUGIN_METHODS.BackgroundRunner = PLUGIN_METHODS.CapacitorBackgroundRunner;
+PLUGIN_METHODS.GoogleMaps = PLUGIN_METHODS.CapacitorGoogleMaps;
 
 function getWindow() {
   return typeof window !== "undefined" ? window : globalThis;
@@ -313,6 +355,35 @@ function mapLocalNotification(notification) {
     Group: notification.group,
     ExpirationTime: notification.schedule && notification.schedule.at,
   };
+}
+
+function getCapacitorPluginConfig(pluginName) {
+  const win = getWindow();
+  const cap = win.Capacitor || {};
+  let config = {};
+
+  if (typeof cap.getConfig === "function") {
+    try {
+      config = cap.getConfig() || {};
+    } catch {}
+  }
+
+  config = config || cap.config || win.CapacitorConfig || win.capacitorConfig || {};
+  const plugins = config.plugins || {};
+  return plugins[pluginName] || plugins[`Capacitor${pluginName}`] || cap[`${pluginName}Config`] || {};
+}
+
+async function hydrateCapacitorConfig(cap) {
+  if (cap.config || typeof fetch !== "function") {
+    return;
+  }
+
+  try {
+    const response = await fetch("capacitor.config.json", { cache: "no-store" });
+    if (response.ok) {
+      cap.config = await response.json();
+    }
+  } catch {}
 }
 
 function createListenerManager(bridge, pluginName, routes = {}) {
@@ -553,7 +624,11 @@ function createAppPlugin(bridge, platform) {
         return { code: (typeof navigator !== "undefined" && navigator.language) || "en-US" };
       }
     },
-    toggleBackButtonHandler: unsupported("App", "toggleBackButtonHandler", "Android back-button control has no UWP equivalent"),
+    toggleBackButtonHandler: (options = {}) => callNative(
+      "App",
+      "toggleBackButtonHandler",
+      () => bridge.toggleBackButtonHandler(options),
+    ),
     addListener: listeners.addListener,
     removeListener: listeners.removeListener,
     removeAllListeners: listeners.removeAllListeners,
@@ -1514,6 +1589,13 @@ function createBackgroundRunnerPlugin(bridge) {
   const listeners = createListenerManager(bridge, "CapacitorBackgroundRunner", {
     backgroundRunnerNotificationReceived: "backgroundRunnerNotificationReceived",
   });
+  const config = getCapacitorPluginConfig("BackgroundRunner");
+
+  if (config && config.autoStart !== false && (config.label || config.event || config.src) && bridge.configureBackgroundRunner) {
+    Promise.resolve(bridge.configureBackgroundRunner(config)).catch((error) => {
+      console.warn("CapacitorBackgroundRunner: autoStart registration failed", error);
+    });
+  }
 
   return {
     checkPermissions: () => callNative(
@@ -1526,9 +1608,546 @@ function createBackgroundRunnerPlugin(bridge) {
       "requestPermissions",
       () => bridge.requestBackgroundRunnerPermissions(options),
     ),
+    dispatchEvent: (options = {}) => callNative(
+      "CapacitorBackgroundRunner",
+      "dispatchEvent",
+      () => bridge.dispatchBackgroundRunnerEvent({ ...config, ...options }),
+    ),
     addListener: listeners.addListener,
     removeListener: listeners.removeListener,
     removeNotificationListeners: listeners.removeAllListeners,
+  };
+}
+
+const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const LEAFLET_JS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+let leafletLoadPromise;
+
+function loadStylesheetOnce(href) {
+  const win = getWindow();
+  const doc = win.document;
+  if (!doc || doc.querySelector(`link[href="${href}"]`)) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const link = doc.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.onload = resolve;
+    link.onerror = () => reject(createCapacitorError(`Failed to load ${href}`, CAP_ERROR.Unavailable));
+    doc.head.appendChild(link);
+  });
+}
+
+function loadScriptOnce(src) {
+  const win = getWindow();
+  const doc = win.document;
+  if (!doc || doc.querySelector(`script[src="${src}"]`)) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const script = doc.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = () => reject(createCapacitorError(`Failed to load ${src}`, CAP_ERROR.Unavailable));
+    doc.head.appendChild(script);
+  });
+}
+
+async function ensureLeaflet() {
+  const win = getWindow();
+  if (win.L && typeof win.L.map === "function") {
+    return win.L;
+  }
+  if (!leafletLoadPromise) {
+    leafletLoadPromise = Promise.all([
+      loadStylesheetOnce(LEAFLET_CSS_URL),
+      loadScriptOnce(LEAFLET_JS_URL),
+    ]).then(() => {
+      if (!win.L || typeof win.L.map !== "function") {
+        unavailable("CapacitorGoogleMaps", "create", "Leaflet failed to initialize");
+      }
+      return win.L;
+    });
+  }
+  return leafletLoadPromise;
+}
+
+function normalizeMapId(options = {}) {
+  return String(options.id || options.mapId || (options.element && options.element.id) || "default");
+}
+
+function normalizeLatLng(value, fallback = { lat: 0, lng: 0 }) {
+  if (!value) return fallback;
+  if (Array.isArray(value)) {
+    return { lat: Number(value[0] ?? fallback.lat), lng: Number(value[1] ?? fallback.lng) };
+  }
+  return {
+    lat: Number(value.lat ?? value.latitude ?? fallback.lat),
+    lng: Number(value.lng ?? value.longitude ?? fallback.lng),
+  };
+}
+
+function normalizeBounds(bounds) {
+  if (!bounds) {
+    return null;
+  }
+  if (Array.isArray(bounds)) {
+    return bounds.map((point) => normalizeLatLng(point));
+  }
+  const southWest = bounds.southwest || bounds.southWest || bounds.sw;
+  const northEast = bounds.northeast || bounds.northEast || bounds.ne;
+  if (southWest && northEast) {
+    return [normalizeLatLng(southWest), normalizeLatLng(northEast)];
+  }
+  return null;
+}
+
+function createGoogleMapsPlugin() {
+  const maps = new Map();
+  const listeners = new Map();
+  let nextListenerId = 1;
+
+  const emit = (eventName, data) => {
+    for (const record of listeners.values()) {
+      if (record.eventName === eventName || record.eventName === "*") {
+        record.callback(data);
+      }
+    }
+  };
+
+  const getRecord = (options = {}) => {
+    const id = normalizeMapId(options);
+    const record = maps.get(id);
+    if (!record) {
+      unavailable("CapacitorGoogleMaps", "map", `map '${id}' has not been created`);
+    }
+    return record;
+  };
+
+  const createOverlayElement = (id) => {
+    const win = getWindow();
+    const doc = win.document;
+    if (!doc) {
+      unavailable("CapacitorGoogleMaps", "create", "document is not available");
+    }
+
+    const shell = doc.createElement("div");
+    shell.className = "capacitor-uwp-leaflet-popup";
+    shell.style.cssText = [
+      "position:fixed",
+      "inset:0",
+      "z-index:2147483000",
+      "display:flex",
+      "align-items:center",
+      "justify-content:center",
+      "background:rgba(0,0,0,.28)",
+    ].join(";");
+
+    const panel = doc.createElement("div");
+    panel.style.cssText = [
+      "width:min(640px,calc(100vw - 32px))",
+      "height:min(640px,calc(100vh - 32px))",
+      "background:#fff",
+      "box-shadow:0 16px 48px rgba(0,0,0,.35)",
+    ].join(";");
+
+    const mapEl = doc.createElement("div");
+    mapEl.id = `capacitor-google-map-${id}`;
+    mapEl.style.cssText = "width:100%;height:100%;";
+    panel.appendChild(mapEl);
+    shell.appendChild(panel);
+    doc.body.appendChild(shell);
+    return { element: mapEl, shell };
+  };
+
+  const resolveElement = (options = {}) => {
+    const win = getWindow();
+    const doc = win.document;
+    if (options.element && typeof options.element === "object" && options.element.nodeType === 1) {
+      return { element: options.element, shell: null };
+    }
+    if (typeof options.element === "string" && doc) {
+      const element = doc.querySelector(options.element) || doc.getElementById(options.element.replace(/^#/, ""));
+      if (element) {
+        return { element, shell: null };
+      }
+    }
+    return createOverlayElement(normalizeMapId(options));
+  };
+
+  return {
+    async create(options = {}) {
+      const L = await ensureLeaflet();
+      const id = normalizeMapId(options);
+      if (maps.has(id)) {
+        await this.destroy({ id });
+      }
+
+      const config = options.config || options;
+      const { element, shell } = resolveElement(options);
+      const center = normalizeLatLng(config.center || config.coordinate, { lat: 0, lng: 0 });
+      const zoom = Number(config.zoom ?? 12);
+      const map = L.map(element, {
+        zoomControl: config.zoomControl !== false,
+        attributionControl: config.attributionControl !== false,
+        dragging: config.touchEnabled !== false,
+      }).setView([center.lat, center.lng], zoom);
+
+      L.tileLayer(config.tileUrl || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: Number(config.maxZoom ?? 19),
+        attribution: config.attribution || "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      const record = {
+        id,
+        element,
+        shell,
+        map,
+        mapType: config.mapType || "normal",
+        markers: new Map(),
+        shapes: new Map(),
+        tileOverlays: new Map(),
+        currentLocationMarker: null,
+      };
+      maps.set(id, record);
+      setTimeout(() => map.invalidateSize(), 0);
+      emit("mapReady", { mapId: id });
+      return { mapId: id };
+    },
+
+    async destroy(options = {}) {
+      const record = getRecord(options);
+      record.map.remove();
+      if (record.shell && record.shell.parentNode) {
+        record.shell.parentNode.removeChild(record.shell);
+      }
+      maps.delete(record.id);
+      return { mapId: record.id };
+    },
+
+    async enableTouch(options = {}) {
+      const { map } = getRecord(options);
+      map.dragging.enable();
+      map.touchZoom.enable();
+      map.scrollWheelZoom.enable();
+    },
+
+    async disableTouch(options = {}) {
+      const { map } = getRecord(options);
+      map.dragging.disable();
+      map.touchZoom.disable();
+      map.scrollWheelZoom.disable();
+    },
+
+    async enableClustering() {
+      return { enabled: false, reason: "Leaflet marker clustering is not bundled by default." };
+    },
+
+    async disableClustering() {
+      return { enabled: false };
+    },
+
+    async enableCurrentLocation(options = {}) {
+      const record = getRecord(options);
+      const enabled = options.enabled !== false;
+      if (!enabled) {
+        if (record.currentLocationMarker) {
+          record.currentLocationMarker.remove();
+          record.currentLocationMarker = null;
+        }
+        return { enabled: false };
+      }
+
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        return { enabled: false, reason: "Geolocation is not available in this WebView." };
+      }
+
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: !!options.enableHighAccuracy,
+          timeout: options.timeout || 10000,
+        });
+      });
+      const coordinate = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      const L = await ensureLeaflet();
+      if (record.currentLocationMarker) {
+        record.currentLocationMarker.setLatLng([coordinate.lat, coordinate.lng]);
+      } else {
+        record.currentLocationMarker = L.circleMarker([coordinate.lat, coordinate.lng], {
+          radius: 7,
+          color: "#2563eb",
+          fillColor: "#2563eb",
+          fillOpacity: 0.8,
+        }).addTo(record.map);
+      }
+      return { enabled: true, coordinate };
+    },
+
+    async enableIndoorMaps(options = {}) {
+      return { enabled: !!options.enabled, reason: "Leaflet/OpenStreetMap has no native indoor-map layer equivalent." };
+    },
+
+    async enableTrafficLayer(options = {}) {
+      return { enabled: !!options.enabled, reason: "Leaflet/OpenStreetMap has no native traffic-layer equivalent." };
+    },
+
+    async enableAccessibilityElements(options = {}) {
+      return { enabled: options.enabled !== false };
+    },
+
+    async setPadding(options = {}) {
+      const record = getRecord(options);
+      record.padding = {
+        top: Number(options.top ?? 0),
+        left: Number(options.left ?? 0),
+        right: Number(options.right ?? 0),
+        bottom: Number(options.bottom ?? 0),
+      };
+      record.map.invalidateSize();
+    },
+
+    async setMapType(options = {}) {
+      const record = getRecord(options);
+      record.mapType = options.mapType || options.type || "normal";
+    },
+
+    async getMapType(options = {}) {
+      return { mapType: getRecord(options).mapType };
+    },
+
+    async setCamera(options = {}) {
+      const { map } = getRecord(options);
+      const coordinate = normalizeLatLng(options.coordinate || options.center || options.target, null);
+      const zoom = options.zoom == null ? map.getZoom() : Number(options.zoom);
+      if (coordinate) {
+        const method = options.animate === false ? "setView" : "flyTo";
+        map[method]([coordinate.lat, coordinate.lng], zoom);
+      } else {
+        map.setZoom(zoom);
+      }
+    },
+
+    async getMapBounds(options = {}) {
+      const bounds = getRecord(options).map.getBounds();
+      return {
+        southwest: { lat: bounds.getSouthWest().lat, lng: bounds.getSouthWest().lng },
+        northeast: { lat: bounds.getNorthEast().lat, lng: bounds.getNorthEast().lng },
+      };
+    },
+
+    async fitBounds(options = {}) {
+      const bounds = normalizeBounds(options.bounds || options);
+      if (!bounds) {
+        unavailable("CapacitorGoogleMaps", "fitBounds", "bounds are required");
+      }
+      getRecord(options).map.fitBounds(bounds.map((point) => [point.lat, point.lng]), {
+        padding: [Number(options.padding ?? 0), Number(options.padding ?? 0)],
+      });
+    },
+
+    async mapBoundsContains(options = {}) {
+      const record = getRecord(options);
+      const point = normalizeLatLng(options.point || options.coordinate);
+      return { contains: record.map.getBounds().contains([point.lat, point.lng]) };
+    },
+
+    async mapBoundsExtend(options = {}) {
+      const record = getRecord(options);
+      const point = normalizeLatLng(options.point || options.coordinate);
+      const bounds = record.map.getBounds().extend([point.lat, point.lng]);
+      return {
+        southwest: { lat: bounds.getSouthWest().lat, lng: bounds.getSouthWest().lng },
+        northeast: { lat: bounds.getNorthEast().lat, lng: bounds.getNorthEast().lng },
+      };
+    },
+
+    async addMarker(options = {}) {
+      const record = getRecord(options);
+      const L = await ensureLeaflet();
+      const markerOptions = options.marker || options;
+      const id = String(markerOptions.id || markerOptions.markerId || `marker-${Date.now()}-${record.markers.size}`);
+      const coordinate = normalizeLatLng(markerOptions.coordinate || markerOptions.position);
+      const marker = L.marker([coordinate.lat, coordinate.lng], {
+        title: markerOptions.title || "",
+        draggable: !!markerOptions.draggable,
+      }).addTo(record.map);
+      const text = markerOptions.snippet || markerOptions.description || markerOptions.title;
+      if (text) {
+        marker.bindPopup(text);
+      }
+      marker.on("click", () => emit("markerClick", { mapId: record.id, markerId: id }));
+      record.markers.set(id, marker);
+      return { id, markerId: id };
+    },
+
+    async addMarkers(options = {}) {
+      const markers = options.markers || [];
+      const ids = [];
+      for (const marker of markers) {
+        const result = await this.addMarker({ ...options, marker });
+        ids.push(result.id);
+      }
+      return { ids };
+    },
+
+    async removeMarker(options = {}) {
+      const record = getRecord(options);
+      const id = String(options.id || options.markerId);
+      const marker = record.markers.get(id);
+      if (marker) {
+        marker.remove();
+        record.markers.delete(id);
+      }
+    },
+
+    async removeMarkers(options = {}) {
+      for (const id of options.ids || options.markerIds || []) {
+        await this.removeMarker({ ...options, id });
+      }
+    },
+
+    async addPolygons(options = {}) {
+      const record = getRecord(options);
+      const L = await ensureLeaflet();
+      const ids = [];
+      for (const polygon of options.polygons || []) {
+        const id = String(polygon.id || `polygon-${Date.now()}-${record.shapes.size}`);
+        const paths = (polygon.paths || polygon.points || []).map((point) => {
+          const coordinate = normalizeLatLng(point);
+          return [coordinate.lat, coordinate.lng];
+        });
+        const layer = L.polygon(paths, polygon).addTo(record.map);
+        record.shapes.set(id, layer);
+        ids.push(id);
+      }
+      return { ids };
+    },
+
+    async removePolygons(options = {}) {
+      const record = getRecord(options);
+      for (const id of options.ids || options.polygonIds || []) {
+        const layer = record.shapes.get(String(id));
+        if (layer) {
+          layer.remove();
+          record.shapes.delete(String(id));
+        }
+      }
+    },
+
+    async addPolylines(options = {}) {
+      const record = getRecord(options);
+      const L = await ensureLeaflet();
+      const ids = [];
+      for (const polyline of options.polylines || []) {
+        const id = String(polyline.id || `polyline-${Date.now()}-${record.shapes.size}`);
+        const path = (polyline.path || polyline.points || []).map((point) => {
+          const coordinate = normalizeLatLng(point);
+          return [coordinate.lat, coordinate.lng];
+        });
+        const layer = L.polyline(path, polyline).addTo(record.map);
+        record.shapes.set(id, layer);
+        ids.push(id);
+      }
+      return { ids };
+    },
+
+    async removePolylines(options = {}) {
+      return this.removePolygons({ ...options, polygonIds: options.ids || options.polylineIds });
+    },
+
+    async addCircles(options = {}) {
+      const record = getRecord(options);
+      const L = await ensureLeaflet();
+      const ids = [];
+      for (const circle of options.circles || []) {
+        const id = String(circle.id || `circle-${Date.now()}-${record.shapes.size}`);
+        const center = normalizeLatLng(circle.center || circle.coordinate);
+        const layer = L.circle([center.lat, center.lng], {
+          ...circle,
+          radius: Number(circle.radius ?? 100),
+        }).addTo(record.map);
+        record.shapes.set(id, layer);
+        ids.push(id);
+      }
+      return { ids };
+    },
+
+    async removeCircles(options = {}) {
+      return this.removePolygons({ ...options, polygonIds: options.ids || options.circleIds });
+    },
+
+    async addTileOverlay(options = {}) {
+      const record = getRecord(options);
+      const L = await ensureLeaflet();
+      const id = String(options.id || options.tileOverlayId || `tile-${Date.now()}-${record.tileOverlays.size}`);
+      const url = options.url || options.urlTemplate;
+      if (!url) {
+        unavailable("CapacitorGoogleMaps", "addTileOverlay", "url or urlTemplate is required");
+      }
+      const layer = L.tileLayer(url, options).addTo(record.map);
+      record.tileOverlays.set(id, layer);
+      return { id };
+    },
+
+    async removeTileOverlay(options = {}) {
+      const record = getRecord(options);
+      const id = String(options.id || options.tileOverlayId);
+      const layer = record.tileOverlays.get(id);
+      if (layer) {
+        layer.remove();
+        record.tileOverlays.delete(id);
+      }
+    },
+
+    async onResize(options = {}) {
+      getRecord(options).map.invalidateSize();
+    },
+
+    async onScroll(options = {}) {
+      getRecord(options).map.invalidateSize();
+    },
+
+    async onDisplay(options = {}) {
+      const record = getRecord(options);
+      if (record.shell) {
+        record.shell.style.display = "flex";
+      }
+      record.map.invalidateSize();
+    },
+
+    async dispatchMapEvent(options = {}) {
+      emit(options.eventName || options.event || "mapEvent", {
+        mapId: normalizeMapId(options),
+        ...(options.data || options.details || {}),
+      });
+    },
+
+    async addListener(eventName, callback) {
+      if (typeof callback !== "function") {
+        throw createCapacitorError("CapacitorGoogleMaps.addListener() requires a callback", CAP_ERROR.Unimplemented);
+      }
+      const id = `CapacitorGoogleMaps:${nextListenerId++}`;
+      listeners.set(id, { eventName, callback });
+      return {
+        _callbackId: id,
+        remove: async () => {
+          listeners.delete(id);
+        },
+      };
+    },
+
+    async removeListener(options = {}) {
+      listeners.delete(options.callbackId);
+    },
+
+    async removeAllListeners() {
+      listeners.clear();
+    },
   };
 }
 
@@ -1543,6 +2162,9 @@ function createWatchPlugin() {
 }
 
 function buildPlugins(bridge, platform) {
+  const backgroundRunner = createBackgroundRunnerPlugin(bridge);
+  const googleMaps = createGoogleMapsPlugin();
+
   return {
     ActionSheet: createActionSheetPlugin(bridge),
     App: createAppPlugin(bridge, platform),
@@ -1571,7 +2193,10 @@ function buildPlugins(bridge, platform) {
     Haptics: createHapticsPlugin(bridge),
     Keyboard: createKeyboardPlugin(bridge),
     CapacitorBarcodeScanner: createBarcodeScannerPlugin(bridge),
-    CapacitorBackgroundRunner: createBackgroundRunnerPlugin(bridge),
+    CapacitorBackgroundRunner: backgroundRunner,
+    BackgroundRunner: backgroundRunner,
+    CapacitorGoogleMaps: googleMaps,
+    GoogleMaps: googleMaps,
     Watch: createWatchPlugin(),
   };
 }
@@ -1586,6 +2211,7 @@ const CapacitorUWP = {
     } catch {}
 
     const cap = installCapacitorRuntime(bridge, platform);
+    await hydrateCapacitorConfig(cap);
     const plugins = buildPlugins(bridge, platform);
     for (const [name, plugin] of Object.entries(plugins)) {
       registerPluginObject(cap, name, plugin);

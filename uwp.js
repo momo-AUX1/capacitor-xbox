@@ -699,6 +699,14 @@ class UwpBridge {
     return this._callStructured("requestBackgroundRunnerPermissions", this._json(options));
   }
 
+  async configureBackgroundRunner(options = {}) {
+    return this._callStructured("configureBackgroundRunner", this._json(options));
+  }
+
+  async dispatchBackgroundRunnerEvent(options = {}) {
+    return this._callStructured("dispatchBackgroundRunnerEvent", this._json(options));
+  }
+
   /**
    * // Listen for deep link events forwarded from C#
     uwp.on('protocolActivated', ({ uri, scheme, host, path, query }) => {
