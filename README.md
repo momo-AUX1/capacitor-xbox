@@ -4,129 +4,214 @@
   <img src="githubimg/logo.png" alt="Capacitor Xbox Logo" width="200" />
 </p>
 
-A [Capacitor](https://capacitorjs.com/) implementation powered by [UWP.js](https://github.com/momo-AUX1/UWP.js) for Xbox and Windows. This project aims to mirror Capacitor’s APIs and integrate them with native UWP features, providing a bridge to run web content on Microsoft platforms with minimal changes.
+Capacitor Xbox brings Capacitor apps to UWP/WebView2 for Windows and Xbox. It ships a ready UWP.js host, a native C# WinRT bridge, and a Capacitor 8 runtime shim so a web app can call native-backed Capacitor-style APIs on Microsoft platforms.
 
----
+| Windows | Xbox | iOS |
+|---------|------|-----|
+| ![Windows UWP app running Capacitor Xbox](githubimg/windows.png) | ![Xbox UWP app running Capacitor Xbox](githubimg/xbox.png) | ![iOS Capacitor app sharing the same web codebase](githubimg/ios.png) |
+| [capacitor-xbox](https://www.npmjs.com/package/capacitor-xbox) | [capacitor-xbox](https://www.npmjs.com/package/capacitor-xbox) | [Capacitor](https://capacitorjs.com) |
 
-| Windows | Xbox | Mobile |
-|---------|------|--------|
-| ![Windows img](https://raw.githubusercontent.com/momo-AUX1/UWP.js/refs/heads/main/githubimg/pc.png) | ![Xbox img](https://raw.githubusercontent.com/momo-AUX1/UWP.js/refs/heads/main/githubimg/xbox.png) | ![Mobile img](https://raw.githubusercontent.com/momo-AUX1/UWP.js/refs/heads/main/githubimg/mobile.png) |
-| [capacitor-xbox](https://www.npmjs.com/package/capacitor-xbox) | [capacitor-xbox](https://www.npmjs.com/package/capacitor-xbox) | [capacitorJS](https://capacitorjs.com) |
+It is not affiliated with Capacitor, Ionic, Microsoft, or Xbox.
 
----
+## What You Get
 
-### Disclaimer
-Capacitor Xbox and UWP.js are in no way affiliated with Capacitor, Ionic, or Microsoft. This is a personal project intended solely to assist developers in the creation and porting of web applications and games to Xbox/Windows platforms.
+- UWP/WebView2 host generation for Windows and Xbox
+- Capacitor 8-compatible runtime globals inside the UWP host
+- Broad native-backed plugin surface for common Capacitor app APIs
+- Neutral `uwp.js` bridge for direct UWP.js usage
+- Xbox-focused host behavior: back button forwarding, controller vibration, in-app toasts, cursor control, and centered browser overlays
+- CLI workflow with `capacitor-xbox init` and `capacitor-xbox sync`
 
----
+## Capacitor 8 Runtime
 
-## Features
-- **Capacitor-style UWP/Xbox bridge**: Mirrors a broad Capacitor plugin surface where UWP has matching native APIs.
-- **UWP.js Under the Hood**: Extends [UWP.js](https://github.com/momo-AUX1/UWP.js) to talk to native Windows/Xbox APIs, file system, and more.
-- **Multi-platform**: Windows desktop and Xbox.
-- **Runtime shim**: When loaded inside the packaged UWP WebView2 host, it installs a Capacitor-compatible runtime shim for supported APIs.
-- **HTML/JS frameworks**: Use your favorite SPA library or plain HTML. The integrated environment can load them straight from the WebView.
+- `@capacitor/core` peer dependency: `>=8.0.0 <9.0.0`
+- typed exports for `capacitor-xbox`, `capacitor-xbox/uwp`, and `capacitor-xbox/capacitorUWP`
+- UWP/Xbox plugin headers for official-style Capacitor plugin proxies
+- `CapacitorCustomPlatform` plugin map inside the WebView2 host
+- native bridge globals: `PluginHeaders`, `nativePromise`, and `nativeCallback`
+- safe browser imports outside UWP, so normal web/iOS/Android builds keep their default Capacitor behavior
 
-## How To Use
-1. **Install** this package (once published to npm) with your usual command:
+## Install
 
 ```bash
 npm install capacitor-xbox
 ```
 
-Then use the help function to quickly see what you can do
+Create or sync the UWP project:
+
 ```bash
-npx capacitor-xbox help
+npx capacitor-xbox init
+npm run build
+npx capacitor-xbox sync
 ```
 
-Common sync options:
+Useful sync options:
 
 ```bash
-# Rename .wasm files to .txt and update references
 npx capacitor-xbox sync --patch-wasm
-
-# Make the first <canvas> fill the screen via inline CSS
 npx capacitor-xbox sync --patch-css
 ```
 
-Here’s an example file structure showing where each piece typically goes:
+## App Entry Setup
+
+Make `capacitor-xbox/capacitorUWP` the first Capacitor runtime import in your app entry. Plugin packages loaded after it register against the UWP/Xbox runtime.
+
+```js
+import "capacitor-xbox/capacitorUWP";
+import { Preferences } from "@capacitor/preferences";
+
+await window.CapacitorUWP?.ready;
+
+await Preferences.set({ key: "theme", value: "dark" });
+const result = await Preferences.get({ key: "theme" });
+console.log(result.value);
 ```
+
+For raw UWP.js usage without Capacitor:
+
+```js
+import UwpBridge from "capacitor-xbox/uwp";
+
+const uwp = new UwpBridge();
+await uwp.hideCursor();
+await uwp.showCursor();
+```
+
+## Runtime Behavior
+
+Inside the generated UWP WebView2 host, `capacitor-xbox/capacitorUWP` auto-installs:
+
+- `window.Capacitor`
+- `window.capacitor`
+- `window.CapacitorUWP`
+- `CapacitorCustomPlatform`
+- `PluginHeaders`
+- `nativePromise`
+- `nativeCallback`
+
+The bridge exposes `window.CapacitorUWP.ready` for apps that want an explicit host-ready hook during startup. Outside the UWP host, the package stays passive and lets the normal Capacitor web runtime run unchanged.
+
+## Supported API Surface
+
+Broadly supported or shimmed:
+
+- `ActionSheet`
+- `App`
+- `AppLauncher`
+- `Browser`
+- `Clipboard`
+- `Device`
+- `Dialog`
+- `LocalNotifications`
+- `Motion`
+- `Network`
+- `Preferences`
+- `PushNotifications`
+- `ScreenOrientation`
+- `ScreenReader`
+- `Share`
+- `SplashScreen`
+- `TextZoom`
+- `Toast`
+- `Camera`
+- `Filesystem`
+- `FileTransfer`
+- `FileViewer`
+- `Geolocation`
+- `Haptics`
+- `Keyboard`
+- `CapacitorBarcodeScanner`
+- `SecureStorage`
+- `UserVerification`
+- `CapacitorBackgroundRunner` / `BackgroundRunner`
+- `CapacitorGoogleMaps` / `GoogleMaps`
+
+The underlying host uses real UWP/WinRT APIs where practical: WebView2, app notifications/toasts, `PasswordVault`, `UserConsentVerifier`, storage folders/pickers, `CameraCaptureUI`, `Geolocator`, `NetworkInformation`, clipboard, share UI, display/input events, sensors, speech synthesis, WNS push, and POS barcode scanner hardware.
+
+## Platform Notes
+
+Some mobile APIs map to UWP equivalents, some are shimmed, and a small set are platform-specific:
+
+- `StatusBar`: unsupported because desktop UWP/Xbox does not expose Android/iOS-style status bar controls.
+- `SystemBars`: not implemented yet. UWP/Xbox has no direct Android/iOS system-bar equivalent.
+- `Watch`: unsupported because it targets watchOS.
+- `GoogleMaps`: implemented with Leaflet/OpenStreetMap, not the native Google Maps SDK.
+- `CapacitorBarcodeScanner`: supports UWP POS scanner hardware; camera barcode scanning is not implemented yet.
+- `Camera.editPhoto` / `Camera.editURIPhoto`: unsupported because UWP has no built-in Capacitor-compatible editor.
+- iOS limited photo-library APIs return limited or empty results because UWP has no equivalent permission model.
+- `Keyboard.setAccessoryBarVisible` and `Keyboard.setScroll`: unsupported because they are iOS-specific controls.
+- `BackgroundRunner`: useful UWP script-runner shim, but still subject to Windows/Xbox background execution policy.
+- Push notifications use WNS, not APNs or FCM.
+- Permission APIs are approximations where UWP/Xbox does not match Android/iOS runtime permissions.
+
+Next API targets:
+
+- `CapacitorCookies`
+- `CapacitorHttp`
+- `InAppBrowser`
+- `PrivacyScreen`
+- `LocalLLM`
+- core `WebView` plugin methods
+
+Regular browser `fetch`, cookies, and WebView2 behavior still work as normal web APIs. They are just not exposed as full Capacitor plugin-compatible native shims yet.
+
+## UWP Host Features
+
+The generated UWP host includes:
+
+- WebView2 local asset hosting
+- local app data virtual host mapping
+- RPC timeout handling
+- native-to-JS event forwarding
+- centered embedded browser overlay
+- Xbox-friendly in-app toast overlay
+- Windows app notifications
+- back button forwarding
+- controller vibration
+- persistent cursor hide/show API
+- optional background script dispatch
+
+The cursor is hidden by default in the host and reapplied on pointer/window events. Use `uwp.hideCursor()` and `uwp.showCursor()` from the neutral UWP.js bridge when you need to control it.
+
+## Project Structure
+
+After `init`, a project typically looks like:
+
+```text
 my-capacitor-xbox-project/
 ├─ package.json
 ├─ capacitor.config.ts
-├─ resources/                // Optional folder for images or icons
-├─ uwp_js.config.json        // Generated config used by the Capacitor Xbox CLI
+├─ resources/
+├─ uwp_js.config.json
 ├─ uwp/
-│  └─ <YourUWPProjectName>/
-│     ├─ MainPage.xaml.cs    // Primary UWP page (acts like your "app delegate")
-│     ├─ <YourUWPProjectName>.csproj
+│  └─ <ProjectName>/
+│     ├─ MainPage.xaml
+│     ├─ MainPage.xaml.cs
+│     ├─ <ProjectName>.csproj
+│     ├─ Package.appxmanifest
 │     ├─ Assets/
-│     │  └─ WP/              // Dist folder for your built web files
-│     └─ ... other UWP project files ...
+│     │  └─ WP/
+│     └─ ...
 └─ ...
 ```
 
-2. **Include the scripts** in your web build:
-```js
-import { CapacitorUWP } from "capacitor-xbox";
+`Assets/WP` is where your built web app is copied during `capacitor-xbox sync`.
 
-// Inside the UWP WebView2 host this is auto-run at import time.
-// Calling it explicitly is safe if you need to await native readiness.
-await CapacitorUWP.autoInit();
+## Notes
 
-// Then do typical Capacitor calls:
-window.Capacitor.Preferences.set({ key: 'myKey', value: 'myVal' });
-```
-3.	Check for the platform if you need environment-specific logic:
-```js
-(async () => {
-  const platform = await window.Capacitor.getPlatform();
-  if (platform === 'xbox' || platform === 'windows') {
-    // Additional or restricted logic for these platforms
-  }
-})();
-```
-4.	Build/Deploy using your normal web or Capacitor workflow. After building, you can integrate the generated files into the UWP host or rely on the provided scripts to “sync” or “init” the environment.
+- Build the web app first, then run `capacitor-xbox sync`.
+- On Xbox, file pickers, camera UI, background execution, and hardware APIs depend on device policy and installed capabilities.
+- WebAssembly or zip assets may need `--patch-wasm` or other packaging workarounds for WebView2/Edge loading behavior.
+- Native UWP compilation still needs Visual Studio/Windows tooling.
 
-Current Status / Limitations
+## Extending The Native Host
 
-Experimental: The Capacitor support layer is still highly experimental, so expect bugs or missing plugins. Some rely on standard web APIs as a fallback, while a few are natively implemented (e.g., Preferences). Over time, more core and community plugins will be added or improved.
+The C# backend lives in the generated UWP project. Add native methods to `UwpNativeMethods` as public `Task<string>` methods, then call them from the JavaScript bridge with `bridge.callNative(...)` or a typed wrapper in `uwp.js`.
 
-This package is not yet a first-class `npx cap add` platform package. It ships its own `capacitor-xbox init` and `capacitor-xbox sync` commands, plus a runtime shim that installs only inside the UWP WebView2 host. Importing it in a normal browser build does not mark the app as native or mutate `window.Capacitor`.
+Keep the native host neutral. Capacitor-specific behavior should stay in `capacitorUWP.js`; the UWP host should expose generic UWP.js capabilities.
 
-Not all file operations are fully supported on Xbox. For instance, file picking is more limited, and .wasm/.zip can fail to load due to a Microsoft Edge bug. Temporarily, rename them or load as base64.
+## Links
 
-Examples of working pieces:
-
-	•	Capacitor Core (partial)
-	•	Preferences (complete)
-	•	Some basic file operations via UWP.js
-	•	Coming soon: Extended FS plugin
-
-What Can You Do on Capacitor-Xbox?
-
-	•	Use the same codebase for all platforms
-	•	If you don’t use Capacitor, you can still just build your HTML/JS and drop it in
-	•	Bring your favorite UI frameworks (React, Vue, Angular, etc.)
-	•	Port WebGL/Emscripten Games* or other advanced scenarios
-
-* Some extra workarounds may be required for WebGL on Edge WebView2, especially for file serving or .wasm file naming.
-
-Known Limitations
-
-	•	Some plugins won’t work out of the box. They might fail or fall back to web-only logic.
-	•	.WASM / .ZIP might need a rename or base64 trick to bypass Edge WebView2 load bugs.
-	•	Filesystem is being developed. In the meantime, you can still do advanced file operations using the raw UWP.js calls.
-
-Using and Extending the C# Backend
-
-Inside the uwp folder, you’ll find the UWP C# project which exposes native methods to the WebView. You can install NuGet packages in Visual Studio (or your preferred IDE) and then surface their functionality by:
-
-	1.	Adding your desired code into UwpNativeMethods.
-	2.	Creating public Task<string> methods that do the new work you need.
-	3.	Calling those methods from your JS by bridge.callNative('yourNewMethodName', args...).
-
-Any extended C# code becomes directly available to your JavaScript via the same bridging mechanism. That way you can map new capabilities (speech recognition, advanced Windows APIs, custom hardware features, etc.) into your web code with minimal overhead.
-
-© 2025. Created by momo-AUX1 and contributed by the open-source community. For issues, discussions, or to submit contributions, please visit:
-https://github.com/momo-AUX1/UWP.js
+- npm: https://www.npmjs.com/package/capacitor-xbox
+- UWP.js: https://github.com/momo-AUX1/UWP.js
+- Capacitor: https://capacitorjs.com/
