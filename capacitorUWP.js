@@ -113,6 +113,15 @@ const PLUGIN_METHODS = {
   ],
   AppLauncher: ["canOpenUrl", "openUrl"],
   Browser: ["open", "close", "addListener", "removeListener", "removeAllListeners"],
+  InAppBrowser: [
+    "openInWebView",
+    "openInSystemBrowser",
+    "openInExternalBrowser",
+    "close",
+    "addListener",
+    "removeListener",
+    "removeAllListeners",
+  ],
   Clipboard: ["write", "read"],
   Device: ["getId", "getInfo", "getBatteryInfo", "getLanguageCode", "getLanguageTag"],
   Dialog: ["alert", "prompt", "confirm"],
@@ -748,6 +757,53 @@ function createBrowserPlugin(bridge) {
       unavailable("Browser", "open", "url is required");
     },
     close: () => callNative("Browser", "close", () => bridge.closeBrowser()),
+    addListener: listeners.addListener,
+    removeListener: listeners.removeListener,
+    removeAllListeners: listeners.removeAllListeners,
+  };
+}
+
+function getInAppBrowserUrl(model = {}, methodName = "open") {
+  const url = model.url || model.href;
+  if (!url) {
+    throw createCapacitorError(`InAppBrowser.${methodName}() requires a url`, CAP_ERROR.Unimplemented);
+  }
+  return url;
+}
+
+function createInAppBrowserPlugin(bridge) {
+  const listeners = createListenerManager(bridge, "InAppBrowser", {
+    browserClosed: {
+      event: "browserFinished",
+      transform: () => undefined,
+    },
+    browserPageLoaded: {
+      event: "browserPageLoaded",
+      transform: () => undefined,
+    },
+    browserPageNavigationCompleted: {
+      event: "browserPageLoaded",
+      transform: (data = {}) => ({ url: data.url }),
+    },
+  });
+
+  const openOverlay = async (model = {}, methodName) => {
+    const url = getInAppBrowserUrl(model, methodName);
+    await callNative("InAppBrowser", methodName, () => bridge.openBrowser({
+      ...model.options,
+      ...model,
+      url,
+    }));
+  };
+
+  return {
+    openInWebView: (model = {}) => openOverlay(model, "openInWebView"),
+    openInSystemBrowser: (model = {}) => openOverlay(model, "openInSystemBrowser"),
+    openInExternalBrowser: async (model = {}) => {
+      const url = getInAppBrowserUrl(model, "openInExternalBrowser");
+      await callNative("InAppBrowser", "openInExternalBrowser", () => bridge.openUrl(url));
+    },
+    close: () => callNative("InAppBrowser", "close", () => bridge.closeBrowser()),
     addListener: listeners.addListener,
     removeListener: listeners.removeListener,
     removeAllListeners: listeners.removeAllListeners,
@@ -2291,6 +2347,7 @@ function buildPlugins(bridge, platform) {
     App: createAppPlugin(bridge, platform),
     AppLauncher: createAppLauncherPlugin(bridge),
     Browser: createBrowserPlugin(bridge),
+    InAppBrowser: createInAppBrowserPlugin(bridge),
     Clipboard: createClipboardPlugin(bridge),
     Device: createDevicePlugin(bridge),
     Dialog: createDialogPlugin(bridge),

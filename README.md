@@ -17,7 +17,7 @@ It is not affiliated with Capacitor, Ionic, Microsoft, or Xbox.
 
 - UWP/WebView2 host generation for Windows and Xbox
 - Capacitor 8-compatible runtime globals inside the UWP host
-- Broad native-backed plugin surface for common Capacitor app APIs
+- Broad native-backed plugin surface for Capacitor app APIs
 - Neutral `uwp.js` bridge for direct UWP.js usage
 - Xbox-focused host behavior: back button forwarding, controller vibration, in-app toasts, cursor control, and centered browser overlays
 - CLI workflow with `capacitor-xbox init` and `capacitor-xbox sync`
@@ -89,16 +89,17 @@ Inside the generated UWP WebView2 host, `capacitor-xbox/capacitorUWP` auto-insta
 - `nativePromise`
 - `nativeCallback`
 
-The bridge exposes `window.CapacitorUWP.ready` for apps that want an explicit host-ready hook during startup. Outside the UWP host, the package stays passive and lets the normal Capacitor web runtime run unchanged.
+The bridge exposes `window.CapacitorUWP.ready` for deterministic app startup inside the host. Outside UWP, normal web/iOS/Android Capacitor behavior stays unchanged.
 
 ## Supported API Surface
 
-Broadly supported or shimmed:
+Supported plugin surface:
 
 - `ActionSheet`
 - `App`
 - `AppLauncher`
 - `Browser`
+- `InAppBrowser`
 - `Clipboard`
 - `Device`
 - `Dialog`
@@ -126,34 +127,18 @@ Broadly supported or shimmed:
 - `CapacitorBackgroundRunner` / `BackgroundRunner`
 - `CapacitorGoogleMaps` / `GoogleMaps`
 
-The underlying host uses real UWP/WinRT APIs where practical: WebView2, app notifications/toasts, `PasswordVault`, `UserConsentVerifier`, storage folders/pickers, `CameraCaptureUI`, `Geolocator`, `NetworkInformation`, clipboard, share UI, display/input events, sensors, speech synthesis, WNS push, and POS barcode scanner hardware.
+The host maps these APIs to real UWP/WinRT features where the platform provides them: WebView2, app notifications/toasts, `PasswordVault`, `UserConsentVerifier`, storage folders/pickers, `CameraCaptureUI`, `Geolocator`, `NetworkInformation`, clipboard, share UI, display/input events, sensors, speech synthesis, WNS push, and POS barcode scanner hardware.
 
-## Platform Notes
+## Platform Mapping
 
-Some mobile APIs map to UWP equivalents, some are shimmed, and a small set are platform-specific:
+Capacitor Xbox keeps the app-facing API familiar while using the Microsoft platform underneath:
 
-- `StatusBar`: unsupported because desktop UWP/Xbox does not expose Android/iOS-style status bar controls.
-- `SystemBars`: not implemented yet. UWP/Xbox has no direct Android/iOS system-bar equivalent.
-- `Watch`: unsupported because it targets watchOS.
-- `GoogleMaps`: implemented with Leaflet/OpenStreetMap, not the native Google Maps SDK.
-- `CapacitorBarcodeScanner`: supports UWP POS scanner hardware; camera barcode scanning is not implemented yet.
-- `Camera.editPhoto` / `Camera.editURIPhoto`: unsupported because UWP has no built-in Capacitor-compatible editor.
-- iOS limited photo-library APIs return limited or empty results because UWP has no equivalent permission model.
-- `Keyboard.setAccessoryBarVisible` and `Keyboard.setScroll`: unsupported because they are iOS-specific controls.
-- `BackgroundRunner`: useful UWP script-runner shim, but still subject to Windows/Xbox background execution policy.
-- Push notifications use WNS, not APNs or FCM.
-- Permission APIs are approximations where UWP/Xbox does not match Android/iOS runtime permissions.
-
-Next API targets:
-
-- `CapacitorCookies`
-- `CapacitorHttp`
-- `InAppBrowser`
-- `PrivacyScreen`
-- `LocalLLM`
-- core `WebView` plugin methods
-
-Regular browser `fetch`, cookies, and WebView2 behavior still work as normal web APIs. They are just not exposed as full Capacitor plugin-compatible native shims yet.
+- `Browser` and `InAppBrowser` use the built-in WebView2 overlay or Windows launcher flow.
+- `GoogleMaps` runs through a Leaflet/OpenStreetMap-backed map surface.
+- `BackgroundRunner` uses Windows background-task scheduling plus a hidden WebView2 runner.
+- `PushNotifications` use WNS.
+- `CapacitorBarcodeScanner` uses UWP POS scanner hardware.
+- iOS/Android-only controls return structured platform results when UWP has no matching system concept.
 
 ## UWP Host Features
 
