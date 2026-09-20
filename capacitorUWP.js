@@ -525,7 +525,10 @@ function installCapacitorRuntime(bridge, platform) {
     if (/^(https?|file|ms-appx|ms-appdata):/i.test(filePath)) {
       return filePath;
     }
-    return `http://localdata/${String(filePath).replace(/^[/\\]+/, "")}`;
+    const relative = String(filePath).replace(/^[/\\]+/, "");
+    return win.__capacitorEdgeHTML
+      ? `ms-appdata:///local/${relative}`
+      : `http://localdata/${relative}`;
   });
   cap.handleError = cap.handleError || ((error) => console.error(error));
   cap.Exception = cap.Exception || class CapacitorException extends Error {

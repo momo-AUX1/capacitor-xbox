@@ -33,6 +33,7 @@
     "capacitorUWP.js",
     "capacitorUWP.d.ts",
     "cli.js",
+    "edgehtml-bridge.js",
     "bin/capacitor-xbox.zip",
     "githubimg/*.png",
     "README.md",

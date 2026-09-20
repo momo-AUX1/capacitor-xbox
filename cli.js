@@ -402,6 +402,20 @@ async function syncProject(modifiers) {
     }
   }
 
+  // Harmless in WebView2; required before any application script in EdgeHTML.
+  await fsp.copyFile(join(__dirname, "edgehtml-bridge.js"), join(uwpAssetsWP, "edgehtml-bridge.js"));
+  const entryHtml = await findHtmlTarget(projectName);
+  if (entryHtml) {
+    let html = await fsp.readFile(entryHtml, "utf8");
+    if (!html.includes("edgehtml-bridge.js")) {
+      const tag = '<script src="./edgehtml-bridge.js"></script>';
+      html = /<head[^>]*>/i.test(html)
+        ? html.replace(/<head[^>]*>/i, (head) => head + tag)
+        : tag + html;
+      await fsp.writeFile(entryHtml, html, "utf8");
+    }
+  }
+
   let capConfig = null;
   if (fs.existsSync("capacitor.config.json")) {
     try {

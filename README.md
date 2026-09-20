@@ -4,7 +4,9 @@
   <img src="githubimg/logo.png" alt="Capacitor Xbox Logo" width="200" />
 </p>
 
-Capacitor Xbox brings Capacitor apps to UWP/WebView2 for Windows and Xbox. It ships a ready UWP.js host, a native C# WinRT bridge, and a Capacitor 8 runtime shim so a web app can call native-backed Capacitor-style APIs on Microsoft platforms.
+Capacitor Xbox brings Capacitor apps to UWP using WebView2 on Windows/Xbox and EdgeHTML on ARM32 Windows 10 Mobile. It ships a ready UWP.js host, a native C# WinRT bridge, and a Capacitor 8 runtime shim so a web app can call native-backed Capacitor-style APIs on Microsoft platforms.
+
+The Visual Studio `ARM` configuration targets Windows 10 build 15063 and uses the OS EdgeHTML WebView. Other configurations retain their WebView2 packages and minimum OS version. The ARM bridge adapts navigation, `window.chrome.webview` messages, script execution, in-app browser views, and the hidden script runner. Run `sync` before packaging so the EdgeHTML JavaScript bridge is placed before application scripts. EdgeHTML does not provide WebView2 virtual HTTP host mappings: package assets use `ms-appx-web`, LocalState URLs use `ms-appdata`, and arbitrary folders selected with a picker cannot be exposed as web origins. Web apps must also ship JavaScript/CSS supported by the older EdgeHTML engine; this shim does not transpile application code.
 
 | Windows | Xbox | iOS |
 |---------|------|-----|
